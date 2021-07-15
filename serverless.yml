@@ -10,6 +10,7 @@ provider:
 frameworkVersion: '2'
 plugins:
   - serverless-google-cloudfunctions
+  - serverless-dotenv-plugin
 package:
   exclude:
     - node_modules/**
