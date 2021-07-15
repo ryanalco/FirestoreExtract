@@ -1,0 +1,27 @@
+service: popl-sp-api-fivetran
+
+provider:
+  name: google
+  stage: dev
+  runtime: python39
+  region: us-central1
+  project: stitch-bytecode
+
+frameworkVersion: '2'
+plugins:
+  - serverless-google-cloudfunctions
+package:
+  exclude:
+    - node_modules/**
+    - .gitignore
+    - .git/**
+
+functions:
+  inventories:
+    handler: inventories_handler
+    events:
+      - http: path
+  sales:
+    handler: sales_handler
+    events:
+      - http: path
