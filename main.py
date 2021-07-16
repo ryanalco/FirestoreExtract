@@ -22,22 +22,24 @@ def handler(request):
     bookmarks = request_json.get('state', {}).get('bookmarks')
     sales_bookmark = get_bookmark(bookmarks, 'sales')
     inventories_bookmark = get_bookmark(bookmarks, 'inventories')
+    now = datetime.datetime.utcnow()
 
     state = {
         'bookmarks': {
-            'sales': sales_bookmark.isoformat(),
-            'inventories': inventories_bookmark.isoformat(),
+            'sales': now.isoformat(),
+            'inventories': now.isoformat(),
         }
     }
 
     insert = {
-        "sales": get_sales(sales_bookmark),
+        "sales": get_sales(sales_bookmark, now),
         "inventories": get_inventories(inventories_bookmark)
     }
 
     return assemble_response_json(insert, state), 200, {"Content-Type": "application/json"}
 
 
+# TODO: figure out access denied error
 def get_inventories(datetimeobj: datetime.datetime):
     """Get inventories data.
     Docs: https://github.com/amzn/selling-partner-api-docs/blob/main/references/fba-inventory-api/fbaInventory.md#getinventorysummariesresponse
@@ -56,15 +58,15 @@ def _get_inventories(start_date_time):
     return response.payload
 
 
-def get_sales(datetimeobj: datetime.datetime):
+def get_sales(start_date: datetime.datetime, end_date: datetime.datetime):
     """Get aggregated sales info.
     Docs: https://github.com/amzn/selling-partner-api-docs/blob/8438231aefe8dfbdf7c1758ddf137a0c728bb21b/references/sales-api/sales.md#getordermetricsresponse
     """
 
     print("getting sales data...")
-    interval = create_date_interval(datetimeobj)
+    interval = create_date_interval(start_date, end_date)
 
-    return _get_sales(interval, Granularity.DAY)
+    return _get_sales(interval, Granularity.HOUR)
 
 
 @backoff.on_exception(backoff.expo, (Exception), max_tries=3)
@@ -75,6 +77,7 @@ def _get_sales(interval: Tuple, granularity: Enum):
     return response.payload
 
 
+# TODO: update inventories schema with correct primary key
 def assemble_response_json(insert, state):
     response_dict = {
         "state": state,
@@ -96,9 +99,11 @@ def assemble_response_json(insert, state):
     return json.dumps(response_dict)
 
 
-def create_date_interval(datetimeobj: datetime.datetime, hours=1) -> Tuple[datetime.datetime, datetime.datetime]:
-    date = (datetimeobj - datetime.timedelta(hours=hours))
-    return (_prepare_datetime(date), _prepare_datetime(datetimeobj))
+def create_date_interval(start_date: datetime.datetime,
+                         end_date: datetime.datetime,
+                         hours=1) -> Tuple[datetime.datetime, datetime.datetime]:
+    date = (start_date - datetime.timedelta(hours=hours))
+    return (_prepare_datetime(date), _prepare_datetime(end_date))
 
 
 def _prepare_datetime(datetimeobj: datetime.datetime) -> str:
