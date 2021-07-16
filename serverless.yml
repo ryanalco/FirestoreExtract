@@ -18,11 +18,7 @@ package:
     - .git/**
 
 functions:
-  inventories:
-    handler: inventories_handler
-    events:
-      - http: path
-  sales:
-    handler: sales_handler
+  amazon-sp-api:
+    handler: handler
     events:
       - http: path
