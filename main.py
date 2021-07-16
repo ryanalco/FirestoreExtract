@@ -1,7 +1,9 @@
 import datetime
 import json
+from enum import Enum
 from typing import List, Tuple
 
+import backoff
 from dateutil import parser
 from sp_api.api import Inventories, Sales
 from sp_api.base.sales_enum import Granularity
@@ -30,29 +32,45 @@ def handler(request):
 
     insert = {
         "sales": get_sales(sales_bookmark),
-        "inventories": get_inventories()
+        "inventories": get_inventories(inventories_bookmark)
     }
 
     return assemble_response_json(insert, state), 200, {"Content-Type": "application/json"}
 
 
-def get_inventories():
+def get_inventories(datetimeobj: datetime.datetime):
     """Get inventories data.
     Docs: https://github.com/amzn/selling-partner-api-docs/blob/main/references/fba-inventory-api/fbaInventory.md#getinventorysummariesresponse
     """
-    # client = Inventories().get_inventory_summary_marketplace()
+    start_date_time = datetimeobj.isoformat()
+
+    # return _get_inventories(start_date_time)
     return []
 
 
-def get_sales(datetimeobj):
+@backoff.on_exception(backoff.expo, (Exception), max_tries=3)
+def _get_inventories(start_date_time):
+    client = Inventories()
+    response = client.get_inventory_summary_marketplace(startDateTime=start_date_time)
+
+    return response.payload
+
+
+def get_sales(datetimeobj: datetime.datetime):
     """Get aggregated sales info.
     Docs: https://github.com/amzn/selling-partner-api-docs/blob/8438231aefe8dfbdf7c1758ddf137a0c728bb21b/references/sales-api/sales.md#getordermetricsresponse
     """
 
     print("getting sales data...")
     interval = create_date_interval(datetimeobj)
+
+    return _get_sales(interval, Granularity.DAY)
+
+
+@backoff.on_exception(backoff.expo, (Exception), max_tries=3)
+def _get_sales(interval: Tuple, granularity: Enum):
     client = Sales()
-    response = client.get_order_metrics(interval=interval, granularity=Granularity.HOUR)
+    response = client.get_order_metrics(interval=interval, granularity=granularity)
 
     return response.payload
 
