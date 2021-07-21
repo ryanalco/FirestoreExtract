@@ -6,6 +6,9 @@ from typing import List, Tuple
 import backoff
 from dateutil import parser
 from sp_api.api import Inventories, Sales
+from sp_api.base.exceptions import (SellingApiRequestThrottledException,
+                                    SellingApiServerException,
+                                    SellingApiTemporarilyUnavailableException)
 from sp_api.base.sales_enum import Granularity
 
 
@@ -39,23 +42,34 @@ def handler(request):
     return assemble_response_json(insert, state), 200, {"Content-Type": "application/json"}
 
 
-# TODO: figure out access denied error
+def log_backoff(details):
+    '''
+    Logs a backoff retry message
+    '''
+    print(f'Error receiving data from Amazon SP API. Sleeping {details["wait"]:.1f} seconds before trying again')
+
+
 def get_inventories(datetimeobj: datetime.datetime):
     """Get inventories data.
     Docs: https://github.com/amzn/selling-partner-api-docs/blob/main/references/fba-inventory-api/fbaInventory.md#getinventorysummariesresponse
     """
+    print("getting inventories data...")
     start_date_time = datetimeobj.isoformat()
 
-    # return _get_inventories(start_date_time)
-    return []
+    return _get_inventories(start_date_time)
 
 
-@backoff.on_exception(backoff.expo, (Exception), max_tries=3)
+@backoff.on_exception(backoff.expo,
+                     (SellingApiRequestThrottledException,
+                      SellingApiServerException,
+                      SellingApiTemporarilyUnavailableException),
+                      max_tries=3,
+                      on_backoff=log_backoff)
 def _get_inventories(start_date_time):
     client = Inventories()
     response = client.get_inventory_summary_marketplace(startDateTime=start_date_time)
 
-    return response.payload
+    return response.payload['inventorySummaries']
 
 
 def get_sales(start_date: datetime.datetime, end_date: datetime.datetime):
@@ -69,7 +83,12 @@ def get_sales(start_date: datetime.datetime, end_date: datetime.datetime):
     return _get_sales(interval, Granularity.HOUR)
 
 
-@backoff.on_exception(backoff.expo, (Exception), max_tries=3)
+@backoff.on_exception(backoff.expo,
+                     (SellingApiRequestThrottledException,
+                      SellingApiServerException,
+                      SellingApiTemporarilyUnavailableException),
+                      max_tries=3,
+                      on_backoff=log_backoff)
 def _get_sales(interval: Tuple, granularity: Enum):
     client = Sales()
     response = client.get_order_metrics(interval=interval, granularity=granularity)
@@ -77,14 +96,16 @@ def _get_sales(interval: Tuple, granularity: Enum):
     return response.payload
 
 
-# TODO: update inventories schema with correct primary key
 def assemble_response_json(insert, state):
     response_dict = {
         "state": state,
         "schema": {
             "inventories": {
                 "primary_key": [
-                    "id"
+                    "asin",
+                    "fnSku",
+                    "sellerSku",
+                    "lastUpdatedTime"
                 ]
             },
             "sales": {
@@ -131,11 +152,11 @@ if __name__ == '__main__':
             return self.data
 
     data = {
-        'secrets': 12341234123,
-        'state': {
-            'bookmarks': {
-                'sales': '2021-07-15T23:52:21.879868',
-                'inventories': '2021-07-15T23:52:21.879868',
+        "secrets": 12341234123,
+        "state": {
+            "bookmarks": {
+                "sales": "2021-07-15T23:52:21.879868",
+                "inventories": "2021-07-15T23:52:21.879868",
             }
         }
     }
