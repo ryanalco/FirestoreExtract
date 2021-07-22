@@ -1,11 +1,12 @@
-service: popl-sp-api-fivetran
+service: popl-fivetran-api
 
 provider:
   name: google
-  stage: dev
+  stage: prod
   runtime: python39
   region: us-central1
   project: stitch-bytecode
+  credentials: ~/.gcloud/bytecode/keyfile.json
 
 frameworkVersion: '2'
 plugins:
@@ -19,7 +20,7 @@ package:
     - .env
 
 functions:
-  amazon-sp-api:
-    handler: handler
+  amazon-sp:
+    handler: amazon_sp_handler
     events:
       - http: path
