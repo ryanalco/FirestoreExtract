@@ -49,7 +49,7 @@ def log_backoff(details):
     print(f'Error receiving data from Amazon SP API. Sleeping {details["wait"]:.1f} seconds before trying again')
 
 
-def get_inventories(datetimeobj: datetime.datetime):
+def get_inventories(datetimeobj: datetime.datetime) -> List:
     """Get inventories data.
     Docs: https://github.com/amzn/selling-partner-api-docs/blob/main/references/fba-inventory-api/fbaInventory.md#getinventorysummariesresponse
     """
@@ -65,14 +65,14 @@ def get_inventories(datetimeobj: datetime.datetime):
                       SellingApiTemporarilyUnavailableException),
                       max_tries=3,
                       on_backoff=log_backoff)
-def _get_inventories(start_date_time):
+def _get_inventories(start_date_time: str) -> List:
     client = Inventories()
     response = client.get_inventory_summary_marketplace(startDateTime=start_date_time)
 
     return response.payload['inventorySummaries']
 
 
-def get_sales(start_date: datetime.datetime, end_date: datetime.datetime):
+def get_sales(start_date: datetime.datetime, end_date: datetime.datetime) -> List:
     """Get aggregated sales info.
     Docs: https://github.com/amzn/selling-partner-api-docs/blob/8438231aefe8dfbdf7c1758ddf137a0c728bb21b/references/sales-api/sales.md#getordermetricsresponse
     """
@@ -89,7 +89,7 @@ def get_sales(start_date: datetime.datetime, end_date: datetime.datetime):
                       SellingApiTemporarilyUnavailableException),
                       max_tries=3,
                       on_backoff=log_backoff)
-def _get_sales(interval: Tuple, granularity: Enum):
+def _get_sales(interval: Tuple, granularity: Enum) -> List:
     client = Sales()
     response = client.get_order_metrics(interval=interval, granularity=granularity)
 
@@ -131,7 +131,7 @@ def _prepare_datetime(datetimeobj: datetime.datetime) -> str:
     return datetimeobj.astimezone().replace(microsecond=0).isoformat()
 
 
-def get_bookmark(bookmarks: List, key: str) -> datetime:
+def get_bookmark(bookmarks: List, key: str) -> datetime.datetime:
     if not bookmarks:
         bookmarks = {}
 
