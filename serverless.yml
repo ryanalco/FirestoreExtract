@@ -5,8 +5,8 @@ provider:
   stage: prod
   runtime: python39
   region: us-central1
-  project: stitch-bytecode
-  credentials: ~/.gcloud/bytecode/keyfile.json
+  project: poplco
+  credentials: ~/.gcloud/popl/keyfile.json
 
 frameworkVersion: '2'
 plugins:
