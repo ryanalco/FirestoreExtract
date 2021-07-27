@@ -1,5 +1,6 @@
 import datetime
 import json
+import time
 from enum import Enum
 from typing import List, Tuple
 
@@ -34,9 +35,11 @@ def amazon_sp_handler(request):
         }
     }
 
+    inventories, seller_skus = get_inventories(inventories_bookmark)
+
     insert = {
-        "sales": get_sales(sales_bookmark, now),
-        "inventories": get_inventories(inventories_bookmark)
+        "sales": get_sales(sales_bookmark, now, seller_skus),
+        "inventories": inventories
     }
 
     return assemble_response_json(insert, state), 200, {"Content-Type": "application/json"}
@@ -65,14 +68,15 @@ def get_inventories(datetimeobj: datetime.datetime) -> List:
                       SellingApiTemporarilyUnavailableException),
                       max_tries=3,
                       on_backoff=log_backoff)
-def _get_inventories(start_date_time: str) -> List:
+def _get_inventories(start_date_time: str) -> Tuple[List, List]:
     client = Inventories()
     response = client.get_inventory_summary_marketplace(startDateTime=start_date_time)
+    seller_skus = get_seller_skus(response.payload['inventorySummaries'])
 
-    return response.payload['inventorySummaries']
+    return (response.payload['inventorySummaries'], seller_skus)
 
 
-def get_sales(start_date: datetime.datetime, end_date: datetime.datetime) -> List:
+def get_sales(start_date: datetime.datetime, end_date: datetime.datetime, seller_skus: List) -> List:
     """Get aggregated sales info.
     Docs: https://github.com/amzn/selling-partner-api-docs/blob/8438231aefe8dfbdf7c1758ddf137a0c728bb21b/references/sales-api/sales.md#getordermetricsresponse
     """
@@ -80,7 +84,7 @@ def get_sales(start_date: datetime.datetime, end_date: datetime.datetime) -> Lis
     print("getting sales data...")
     interval = create_date_interval(start_date, end_date)
 
-    return _get_sales(interval, Granularity.HOUR)
+    return _get_sales(interval, Granularity.HOUR, seller_skus)
 
 
 @backoff.on_exception(backoff.expo,
@@ -89,11 +93,24 @@ def get_sales(start_date: datetime.datetime, end_date: datetime.datetime) -> Lis
                       SellingApiTemporarilyUnavailableException),
                       max_tries=3,
                       on_backoff=log_backoff)
-def _get_sales(interval: Tuple, granularity: Enum) -> List:
+def _get_sales(interval: Tuple, granularity: Enum, seller_skus: List) -> List:
     client = Sales()
-    response = client.get_order_metrics(interval=interval, granularity=granularity)
 
-    return response.payload
+    records = []
+    for sku in seller_skus:
+        if not sku:
+            continue
+        response = client.get_order_metrics(interval=interval, granularity=granularity, sku=sku)
+
+        for record in response.payload:
+            record.update({'sellerSku': sku})
+            records.append(record)
+
+        sleep_time = 1
+        print(f"Sleeping for {sleep_time} seconds...")
+        time.sleep(sleep_time)
+
+    return records
 
 
 def assemble_response_json(insert, state):
@@ -143,6 +160,10 @@ def get_bookmark(bookmarks: List, key: str) -> datetime.datetime:
     return parser.parse(bookmark)
 
 
+def get_seller_skus(payload: List) -> set:
+    return {record.get('sellerSku') for record in payload}
+
+
 if __name__ == '__main__':
     class Request:
         def __init__(self, data) -> None:
@@ -155,8 +176,8 @@ if __name__ == '__main__':
         "secrets": 12341234123,
         "state": {
             "bookmarks": {
-                "sales": "2021-07-15T23:52:21.879868",
-                "inventories": "2021-07-15T23:52:21.879868"
+                "sales": "2021-07-27T16:52:21.879868",
+                "inventories": "2021-07-27T16:52:21.879868"
             }
         }
     }
