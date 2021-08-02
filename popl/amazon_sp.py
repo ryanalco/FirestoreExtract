@@ -35,10 +35,10 @@ def amazon_sp_handler(request):
         }
     }
 
-    inventories, seller_skus = get_inventories(inventories_bookmark)
+    inventories, _ = get_inventories(inventories_bookmark)
 
     insert = {
-        "sales": get_sales(sales_bookmark, now, seller_skus),
+        "sales": get_sales(sales_bookmark, now),
         "inventories": inventories
     }
 
@@ -76,10 +76,13 @@ def _get_inventories(start_date_time: str) -> Tuple[List, List]:
     return (response.payload['inventorySummaries'], seller_skus)
 
 
-def get_sales(start_date: datetime.datetime, end_date: datetime.datetime, seller_skus: List) -> List:
+def get_sales(start_date: datetime.datetime, end_date: datetime.datetime) -> List:
     """Get aggregated sales info.
     Docs: https://github.com/amzn/selling-partner-api-docs/blob/8438231aefe8dfbdf7c1758ddf137a0c728bb21b/references/sales-api/sales.md#getordermetricsresponse
     """
+    # Grab all the inventory data from the last 30 days
+    inventory_start_date = (start_date - datetime.timedelta(days=30)).isoformat()
+    _, seller_skus = _get_inventories(inventory_start_date)
 
     print("getting sales data...")
     interval = create_date_interval(start_date, end_date)
@@ -97,9 +100,11 @@ def _get_sales(interval: Tuple, granularity: Enum, seller_skus: List) -> List:
     client = Sales()
 
     records = []
-    for sku in seller_skus:
+    num_seller_skus = len(seller_skus)
+    for idx, sku in enumerate(seller_skus, start=1):
         if not sku:
             continue
+        print(f"Getting sales data for sellerSku: {sku} ({idx}/{num_seller_skus})")
         response = client.get_order_metrics(interval=interval, granularity=granularity, sku=sku)
 
         for record in response.payload:
@@ -107,6 +112,8 @@ def _get_sales(interval: Tuple, granularity: Enum, seller_skus: List) -> List:
             records.append(record)
 
         sleep_time = 1
+        print(f"response:\n\t {json.dumps(response.payload, indent=2)}")
+        print("=" * 120)
         print(f"Sleeping for {sleep_time} seconds...")
         time.sleep(sleep_time)
 
