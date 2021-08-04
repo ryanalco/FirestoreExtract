@@ -134,7 +134,8 @@ def assemble_response_json(insert, state):
             },
             "sales": {
                 "primary_key": [
-                    "interval"
+                    "interval",
+                    "sellerSku"
                 ]
             }
         },
