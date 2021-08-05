@@ -25,3 +25,7 @@ functions:
     handler: amazon_sp_handler
     events:
       - http: path
+  rakuten-smartfill:
+    handler: rakuten_handler
+    events:
+      - http: path
