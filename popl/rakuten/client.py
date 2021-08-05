@@ -48,9 +48,8 @@ class RakutenClient:
             response = session.request(method, url, headers=headers, params=params, data=data)
 
             if response.status_code != 200:
-                # raise_for_error(response)
-                # return None
-                response.raise_for_status()
+                raise_for_error(response)
+                return None
 
             return response.json()
 
