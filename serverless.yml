@@ -5,7 +5,7 @@ provider:
   stage: prod
   runtime: python39
   region: us-central1
-  timeout: 120s
+  timeout: 300s
   project: poplco
   credentials: ~/.gcloud/popl/keyfile.json
 

@@ -25,7 +25,6 @@ def amazon_sp_handler(request):
     request_json = request.get_json()
     bookmarks = request_json.get('state', {}).get('bookmarks')
     sales_bookmark = get_bookmark(bookmarks, 'sales')
-    inventories_bookmark = get_bookmark(bookmarks, 'inventories')
     now = datetime.datetime.utcnow()
 
     state = {
@@ -35,10 +34,10 @@ def amazon_sp_handler(request):
         }
     }
 
-    inventories, _ = get_inventories(inventories_bookmark)
+    inventories, seller_skus = get_inventories()
 
     insert = {
-        "sales": get_sales(sales_bookmark, now),
+        "sales": get_sales(sales_bookmark, now, seller_skus),
         "inventories": inventories
     }
 
@@ -52,37 +51,24 @@ def log_backoff(details):
     print(f'Error receiving data from Amazon SP API. Sleeping {details["wait"]:.1f} seconds before trying again')
 
 
-def get_inventories(datetimeobj: datetime.datetime) -> List:
-    """Get inventories data.
-    Docs: https://github.com/amzn/selling-partner-api-docs/blob/main/references/fba-inventory-api/fbaInventory.md#getinventorysummariesresponse
-    """
-    print("getting inventories data...")
-    start_date_time = datetimeobj.isoformat()
-
-    return _get_inventories(start_date_time)
-
-
 @backoff.on_exception(backoff.expo,
                      (SellingApiRequestThrottledException,
                       SellingApiServerException,
                       SellingApiTemporarilyUnavailableException),
                       max_tries=3,
                       on_backoff=log_backoff)
-def _get_inventories(start_date_time: str) -> Tuple[List, List]:
+def get_inventories() -> Tuple[List, List]:
     client = Inventories()
-    response = client.get_inventory_summary_marketplace(startDateTime=start_date_time)
+    response = client.get_inventory_summary_marketplace(details=True)
     seller_skus = get_seller_skus(response.payload['inventorySummaries'])
 
     return (response.payload['inventorySummaries'], seller_skus)
 
 
-def get_sales(start_date: datetime.datetime, end_date: datetime.datetime) -> List:
+def get_sales(start_date: datetime.datetime, end_date: datetime.datetime, seller_skus: set) -> List:
     """Get aggregated sales info.
     Docs: https://github.com/amzn/selling-partner-api-docs/blob/8438231aefe8dfbdf7c1758ddf137a0c728bb21b/references/sales-api/sales.md#getordermetricsresponse
     """
-    # Grab all the inventory data from the last 30 days
-    inventory_start_date = (start_date - datetime.timedelta(days=30)).isoformat()
-    _, seller_skus = _get_inventories(inventory_start_date)
 
     print("getting sales data...")
     interval = create_date_interval(start_date, end_date)
