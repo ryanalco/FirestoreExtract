@@ -60,7 +60,7 @@ class RakutenClient:
             'Content-Type': 'application/json',
         }
 
-    def get_items(self, *args, **kwargs):
+    def get_items(self, params=None, *args, **kwargs):
         self._get_access_token()
         url = self._build_url('/Items')
-        return self._get(url)
+        return self._get(url, params=params)
