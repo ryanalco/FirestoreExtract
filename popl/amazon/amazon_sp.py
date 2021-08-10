@@ -97,7 +97,7 @@ def _get_sales(interval: Tuple, granularity: Enum, seller_skus: List) -> List:
             record.update({'sellerSku': sku})
             records.append(record)
 
-        sleep_time = 1
+        sleep_time = 2
         print(f"response:\n\t {json.dumps(response.payload, indent=2)}")
         print("=" * 120)
         print(f"Sleeping for {sleep_time} seconds...")
