@@ -29,3 +29,7 @@ functions:
     handler: rakuten_handler
     events:
       - http: path
+  3pl-central:
+    handler: tpl_handler
+    events:
+      - http: path
