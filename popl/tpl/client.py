@@ -149,20 +149,3 @@ class TPLClient(object):
             raise ValueError('Data Undefined.')
         full_url = f"{self._base_url}/{resource_path}"
         return self._execute(full_url, 'POST', data=json.dumps(data), add_headers=add_headers)
-
-
-if __name__ == '__main__':
-    import os
-
-    user_id = 78
-    tpl_key = 3
-    client_id = os.getenv('TPL_CLIENT_ID')
-    client_secret = os.getenv('TPL_CLIENT_SECRET')
-
-    client = TPLClient(client_id=client_id, client_secret=client_secret, user_login_id=78)
-    params = {
-                'pgsiz': 200,
-                'sort': 'receivedDate'
-            }
-    response = client.get('inventory', params=params)
-    print(response)
