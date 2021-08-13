@@ -59,10 +59,19 @@ def log_backoff(details):
                       on_backoff=log_backoff)
 def get_inventories() -> Tuple[List, List]:
     client = Inventories()
-    response = client.get_inventory_summary_marketplace(details=True)
-    seller_skus = get_seller_skus(response.payload['inventorySummaries'])
+    paginate = True
+    next_token = None
+    seller_skus = set()
+    payload = []
 
-    return (response.payload['inventorySummaries'], seller_skus)
+    while paginate:
+        response = client.get_inventory_summary_marketplace(details=True, nextToken=next_token)
+        seller_skus = seller_skus.union(get_seller_skus(response.payload['inventorySummaries']))
+        next_token = response.next_token
+        paginate = True if next_token else False
+        payload.extend(response.payload['inventorySummaries'])
+
+    return (payload, seller_skus)
 
 
 def get_sales(start_date: datetime.datetime, end_date: datetime.datetime, seller_skus: set) -> List:
@@ -115,7 +124,6 @@ def assemble_response_json(insert, state):
                     "asin",
                     "fnSku",
                     "sellerSku",
-                    "lastUpdatedTime"
                 ]
             },
             "sales": {
