@@ -10,7 +10,7 @@ This project contains Google Cloud functions that are managed and deployed by th
 
 This project looks for a `.env` file containing environment variables and uses the `serverless-dotenv-plugin` plugin to load the values from this file when deploying the project. All the variables in this file will be made available as environment variables to all the cloud functions deployed.
 
-# Setup and Deploying
+## Setup and Deploying
 
 Before running the deploy command, you will need to install two required plugins by running the following commands:
 
