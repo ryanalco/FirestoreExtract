@@ -67,7 +67,10 @@ def get_inventories() -> Tuple[List, List]:
     while paginate:
         response = client.get_inventory_summary_marketplace(details=True, nextToken=next_token)
         seller_skus = seller_skus.union(get_seller_skus(response.payload['inventorySummaries']))
-        next_token = response.next_token
+        if response.pagination:
+            next_token = response.pagination.get("nextToken")
+        else:
+            next_token = None
         paginate = True if next_token else False
         payload.extend(response.payload['inventorySummaries'])
 
