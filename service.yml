@@ -6,4 +6,12 @@ spec:
   template:
     spec:
       containers:
-      - image: IMAGE
+      - image: gcr.io/stitch-bytecode/firebase-to-gcp-bucket:latest
+        ports:
+        - containerPort: 8080
+          name: http1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+      timeoutSeconds: 0
