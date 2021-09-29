@@ -1,0 +1,1 @@
+docker tag gcr.io/stitch-bytecode/popl-firebase-load-test:latest gcr.io/stitch-bytecode/popl-firebase-load-test:latest
