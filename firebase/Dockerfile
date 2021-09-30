@@ -17,6 +17,7 @@ COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 ADD keys ./keys
+COPY logging.conf ./logging.conf
 COPY firebase.py ./firebase.py
 COPY main.py ./main.py
 

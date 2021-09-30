@@ -1,8 +1,15 @@
+import logging
+import logging.config
 import os
 
 from flask import Flask
 
 from firebase import load_firebase_collections
+
+logging.config.fileConfig(fname='logging.conf', disable_existing_loggers=False)
+
+# Get the logger specified in the file
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -10,7 +17,7 @@ app = Flask(__name__)
 @app.route("/")
 def run():
 
-    print("running firebase load job")
+    logger.info("running firebase load job...")
     load_firebase_collections()
 
     return ("", 204)

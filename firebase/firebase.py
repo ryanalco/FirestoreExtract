@@ -1,9 +1,16 @@
 import json
+import logging
+import logging.config
 import os
 
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud import storage
+
+logging.config.fileConfig(fname='logging.conf', disable_existing_loggers=False)
+
+# Get the logger specified in the file
+logger = logging.getLogger(__name__)
 
 POPL_SERVICE_ACCOUNT_PATH = os.getenv("POPL_SERVICE_ACCOUNT_PATH")
 SERVICE_ACCOUNT_PATH = os.getenv("SERVICE_ACCOUNT_PATH")
@@ -40,14 +47,14 @@ def _upload_blob(bucket_name: str, source_file_name: str, destination_blob_name:
 
     blob.upload_from_filename(source_file_name)
 
-    print(f"File {source_file_name} uploaded to {destination_blob_name}.")
+    logger.info(f"File {source_file_name} uploaded to {destination_blob_name}.")
 
 
 def _write_file(data: list, collection_name: str, batch_num: int) -> str:
     """Writes a json file to local file system"""
     filename = f"collection_{collection_name}_{batch_num}.json"
     with open(filename, 'w') as f:
-        print(f"Writing collection {collection_name} - batch {batch_num} to file {filename}")
+        logger.info(f"Writing collection {collection_name} - batch {batch_num} to file {filename}")
         json.dump(data, f)
 
     return filename
@@ -58,9 +65,9 @@ def _remove_file(filename):
     # If file exists, delete it
     if os.path.isfile(filename):
         os.remove(filename)
-        print(f"Removed filename {filename}")
+        logger.info(f"Removed filename {filename}")
     else:
-        print(f"Warning: {filename} file not found. Could not remove")
+        logger.warn(f"Warning: {filename} file not found. Could not remove")
 
 
 def batch_upload(bucket_name: str, data: list, collection_name: str, batch_num: int):
@@ -96,7 +103,7 @@ def batch_process(bucket_name: str, batch_size: int, docs: list, collection_name
 
 def load_firebase_collections():
     for collection in COLLECTIONS:
-        print(f"Getting documents for collection: {collection}...")
+        logger.info(f"Getting documents for collection: {collection}...")
         docs = get_collection_documents(collection)
         batch_process(BUCKET_NAME, DEFAULT_BATCH_SIZE, docs, collection)
 
