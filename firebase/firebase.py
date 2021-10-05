@@ -2,10 +2,13 @@ import json
 import logging
 import logging.config
 import os
+from typing import List
 
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud import storage
+from google.cloud.firestore_v1.base_document import DocumentSnapshot
+from google.cloud.firestore_v1.collection import CollectionReference
 
 logging.config.fileConfig(fname='logging.conf', disable_existing_loggers=False)
 
@@ -27,9 +30,44 @@ db = firestore.client()
 storage_client = storage.Client.from_service_account_json(json_credentials_path=SERVICE_ACCOUNT_PATH)
 
 
-def get_collection_documents(collection_name: str) -> list:
-    """Gets all documents from a firebase collection"""
-    return db.collection(collection_name).stream()
+def get_collection_documents(collection_name: str, batch_size: int, offset: int) -> list:
+    """Gets documents from a firebase collection"""
+    return db.collection(collection_name).limit(batch_size).offset(offset).get()
+
+
+def get_subcollection_documents(document: DocumentSnapshot) -> CollectionReference:
+    """Gets subcollection reference from a document"""
+
+    data = {'parent_document_id': document.id, 'subcollection': {}}
+    return document.reference.collections()
+    for collection_reference in subcollection:
+        data['subcollection']['name'] = collection_reference.id
+
+        if not data['subcollection'].get('data'):
+            data['subcollection']['data'] = []
+
+        for sub_document in collection_reference.stream():
+            data['subcollection']['data'].append({
+                    'id': sub_document.id,
+                    'data': sub_document.to_dict(),
+                })
+
+    return data
+
+def json_serialize_subcollection_documents(documents: List[CollectionReference],
+                                           parent_document_id: str) -> list:
+    data = {'parent_document_id': parent_document_id, 'subcollection': {}}
+    for document in documents:
+        data['subcollection']['name'] = document.id
+
+        if not data['subcollection'].get('data'):
+            data['subcollection']['data'] = []
+
+        for sub_document in document.stream():
+            data['subcollection']['data'].append({
+                    'id': sub_document.id,
+                    'data': sub_document.to_dict(),
+                })
 
 
 def _upload_blob(bucket_name: str, source_file_name: str, destination_blob_name: str):
@@ -82,7 +120,10 @@ def batch_process(bucket_name: str, batch_size: int, docs: list, collection_name
     batch = []
 
     for doc in docs:
-        batch.append(doc.to_dict())
+        batch.append({
+            'id': doc.id,
+            'data': doc.to_dict(),
+        })
 
         # If batch list equals batch size, write batch to file,
         # clear the batch list, and reset counters
