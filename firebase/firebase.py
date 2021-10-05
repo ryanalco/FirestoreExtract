@@ -2,6 +2,7 @@ import json
 import logging
 import logging.config
 import os
+from datetime import datetime
 from typing import List
 
 import firebase_admin
@@ -10,7 +11,9 @@ from google.cloud import storage
 from google.cloud.firestore_v1.base_document import DocumentSnapshot
 from google.cloud.firestore_v1.collection import CollectionReference
 
-logging.config.fileConfig(fname='logging.conf', disable_existing_loggers=False)
+log_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logging.conf')
+print(log_file_path)
+logging.config.fileConfig(fname=log_file_path, disable_existing_loggers=False)
 
 # Get the logger specified in the file
 logger = logging.getLogger(__name__)
@@ -35,39 +38,34 @@ def get_collection_documents(collection_name: str, batch_size: int, offset: int)
     return db.collection(collection_name).limit(batch_size).offset(offset).get()
 
 
-def get_subcollection_documents(document: DocumentSnapshot) -> CollectionReference:
+def get_subcollection_references(document: DocumentSnapshot) -> CollectionReference:
     """Gets subcollection reference from a document"""
 
-    data = {'parent_document_id': document.id, 'subcollection': {}}
     return document.reference.collections()
-    for collection_reference in subcollection:
-        data['subcollection']['name'] = collection_reference.id
 
-        if not data['subcollection'].get('data'):
-            data['subcollection']['data'] = []
 
-        for sub_document in collection_reference.stream():
-            data['subcollection']['data'].append({
-                    'id': sub_document.id,
-                    'data': sub_document.to_dict(),
-                })
-
-    return data
-
-def json_serialize_subcollection_documents(documents: List[CollectionReference],
-                                           parent_document_id: str) -> list:
-    data = {'parent_document_id': parent_document_id, 'subcollection': {}}
+def process_subcollection_documents(documents: List[CollectionReference], parent_document_id: str) -> list:
+    """Prepare and process documents from a subcollection"""
+    subcollections = []
     for document in documents:
-        data['subcollection']['name'] = document.id
+        data = {}
+        # Add subcollection name
+        data['parent_document_id'] = parent_document_id
+        data['name'] = document.id
 
-        if not data['subcollection'].get('data'):
-            data['subcollection']['data'] = []
+        # Add empty list if not present for subcollection
+        if not data.get('data'):
+            data['data'] = []
 
         for sub_document in document.stream():
-            data['subcollection']['data'].append({
+            data['data'].append({
                     'id': sub_document.id,
                     'data': sub_document.to_dict(),
                 })
+
+        subcollections.append(data)
+
+    return subcollections
 
 
 def _upload_blob(bucket_name: str, source_file_name: str, destination_blob_name: str):
@@ -88,14 +86,16 @@ def _upload_blob(bucket_name: str, source_file_name: str, destination_blob_name:
     logger.info(f"File {source_file_name} uploaded to {destination_blob_name}.")
 
 
-def _write_file(data: list, collection_name: str, batch_num: int) -> str:
-    """Writes a json file to local file system"""
-    filename = f"collection_{collection_name}_{batch_num}.json"
-    with open(filename, 'w') as f:
-        logger.info(f"Writing collection {collection_name} - batch {batch_num} to file {filename}")
-        json.dump(data, f)
+def _generate_filename(collection_name: str) -> str:
+    """Generates a filename"""
+    return f"collection_{collection_name}_{_get_timestamp_string()}.json"
 
-    return filename
+
+def _write_file(filename: str, data: list):
+    """Writes a json file to local file system"""
+    with open(filename, 'w') as f:
+        logger.info(f"Writing collection to file {filename}")
+        json.dump(data, f)
 
 
 def _remove_file(filename):
@@ -108,10 +108,41 @@ def _remove_file(filename):
         logger.warn(f"Warning: {filename} file not found. Could not remove")
 
 
-def batch_upload(bucket_name: str, data: list, collection_name: str, batch_num: int):
-    filename = _write_file(data, collection_name, batch_num)
-    _upload_blob(bucket_name, filename, filename)
-    _remove_file(filename)
+def _get_timestamp_string():
+    """
+    Helper function that generates timestamp string for
+    inserting into filename
+    """
+    return str(datetime.utcnow().timestamp()).replace('.', '_')
+
+
+def batch_upload(bucket_name: str, data: list, collection_name: str):
+    filename = _generate_filename(collection_name)
+    _write_file(filename, data)
+    # _upload_blob(bucket_name, filename, f"{collection_name}/{filename}")
+    # _remove_file(filename)
+
+
+def process_subcollections(document: DocumentSnapshot) -> list:
+    subcollection_references = get_subcollection_references(document)
+    return process_subcollection_documents(subcollection_references, document.id)
+
+
+def process_documents(bucket_name: str, documents: List[DocumentSnapshot], collection_name: str):
+    """Prepare and process documents form a collection"""
+
+    collection_documents = []
+    for document in documents:
+        collection_documents.append({
+            'id': document.id,
+            'data': document.to_dict(),
+        })
+
+        subcollections = process_subcollections(document)
+        for subcollection in subcollections:
+            batch_upload(bucket_name, subcollection, subcollection.get('name'))
+
+    batch_upload(bucket_name, collection_documents, collection_name)
 
 
 def batch_process(bucket_name: str, batch_size: int, docs: list, collection_name: str):
@@ -145,8 +176,9 @@ def batch_process(bucket_name: str, batch_size: int, docs: list, collection_name
 def load_firebase_collections():
     for collection in COLLECTIONS:
         logger.info(f"Getting documents for collection: {collection}...")
-        docs = get_collection_documents(collection)
-        batch_process(BUCKET_NAME, DEFAULT_BATCH_SIZE, docs, collection)
+        docs = get_collection_documents(collection, 3, 500)
+        # batch_process(BUCKET_NAME, DEFAULT_BATCH_SIZE, docs, collection)
+        process_documents(BUCKET_NAME, docs, collection)
 
 
 if __name__ == '__main__':
