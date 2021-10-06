@@ -24,6 +24,8 @@ SERVICE_ACCOUNT_PATH = os.getenv("SERVICE_ACCOUNT_PATH")
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 DEFAULT_BATCH_SIZE = 100
 COLLECTIONS = ['people']
+OFFSET_COLLECTION = "offset_collection"
+OFFSET_COLLECTION_KEY = 'offset'
 MAX_RUN_TIME = 30
 START_TIME = time.time()
 
@@ -38,7 +40,7 @@ storage_client = storage.Client.from_service_account_json(json_credentials_path=
 
 def get_collection_documents(collection_name: str, batch_size: int, offset: int) -> list:
     """Gets documents from a firebase collection"""
-    return db.collection(collection_name).limit(batch_size).offset(offset).get()
+    return db.collection(collection_name).offset(offset).limit(batch_size).get()
 
 
 def get_subcollection_references(document: DocumentSnapshot) -> CollectionReference:
@@ -119,6 +121,11 @@ def _get_timestamp_string():
     return str(datetime.utcnow().timestamp()).replace('.', '_')
 
 
+def _format_offset_id(collection_name: str) -> str:
+    """Takes a collection name and formats it to be used as a document ID"""
+    return f"{collection_name}_offset_id"
+
+
 def batch_upload(bucket_name: str, data: list, collection_name: str):
     filename = _generate_filename(collection_name)
     _write_file(filename, data)
@@ -182,12 +189,22 @@ def batch_process(bucket_name: str, batch_size: int, collection_name: str):
 
 def get_latest_offset(collection_name: str) -> int:
     """Fetches the last offset to sync records from that point on"""
-    return 500
+    offset_id = _format_offset_id(collection_name)
+    doc = db.collection(OFFSET_COLLECTION).document(offset_id).get()
+    if doc.exists:
+        offset = doc.to_dict().get(OFFSET_COLLECTION_KEY)
+        logger.info(f"Found offset {offset} for collection {collection_name}")
+        return offset
+    else:
+        logger.warning(f"No offset found for collection {collection_name} in the {OFFSET_COLLECTION} collection. Using 0 as default offset")
+        return 0
 
 
 def set_latest_offset(collection_name: str, offset: int):
     """Save the latest offset used"""
-    pass
+    offset_id = _format_offset_id(collection_name)
+    data = {OFFSET_COLLECTION_KEY: offset}
+    db.collection(OFFSET_COLLECTION).document(offset_id).set(data)
 
 
 def load_firebase_collections():
