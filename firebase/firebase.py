@@ -132,6 +132,7 @@ def process_documents(bucket_name: str, documents: List[DocumentSnapshot], colle
     """Prepare and process documents form a collection"""
 
     collection_documents = []
+    subcollection_documents = []
     for document in documents:
         collection_documents.append({
             'id': document.id,
@@ -139,8 +140,14 @@ def process_documents(bucket_name: str, documents: List[DocumentSnapshot], colle
         })
 
         subcollections = process_subcollections(document)
-        for subcollection in subcollections:
-            batch_upload(bucket_name, subcollection, subcollection.get('name'))
+        subcollection_documents.extend(subcollections)
+
+    # Splits different types of subcollections into their
+    # own file if there is more than one type of collection
+    subcollection_set = {col.get('name') for col in subcollection_documents}
+    for subcollection_name in subcollection_set:
+        data = [col for col in subcollection_documents if col.get('name') == subcollection_name]
+        batch_upload(bucket_name, data, subcollection_name)
 
     batch_upload(bucket_name, collection_documents, collection_name)
 
