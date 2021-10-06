@@ -27,7 +27,6 @@ COLLECTIONS = ['people']
 OFFSET_COLLECTION = "offset_collection"
 OFFSET_COLLECTION_KEY = 'offset'
 MAX_RUN_TIME = 30
-START_TIME = time.time()
 
 # Get credentials
 cred = credentials.Certificate(POPL_SERVICE_ACCOUNT_PATH)
@@ -162,7 +161,7 @@ def process_documents(bucket_name: str, documents: List[DocumentSnapshot], colle
     batch_upload(bucket_name, collection_documents, collection_name)
 
 
-def batch_process(bucket_name: str, batch_size: int, collection_name: str):
+def batch_process(bucket_name: str, batch_size: int, collection_name: str, start_time: float):
     offset = get_latest_offset(collection_name)
     process = True
 
@@ -174,8 +173,8 @@ def batch_process(bucket_name: str, batch_size: int, collection_name: str):
             process = False
             continue
 
-        if (time.time() - START_TIME >= MAX_RUN_TIME):
-            logger.info(f"Job runtime {time.time() - START_TIME} approaching MAX_RUN_TIME limit")
+        if (time.time() - start_time >= MAX_RUN_TIME):
+            logger.info(f"Job runtime {time.time() - start_time} approaching MAX_RUN_TIME limit")
             process = False
             continue
 
@@ -208,8 +207,9 @@ def set_latest_offset(collection_name: str, offset: int):
 
 
 def load_firebase_collections():
+    start_time = time.time()
     for collection_name in COLLECTIONS:
-        batch_process(BUCKET_NAME, DEFAULT_BATCH_SIZE, collection_name)
+        batch_process(BUCKET_NAME, DEFAULT_BATCH_SIZE, collection_name, start_time)
 
 
 if __name__ == '__main__':
