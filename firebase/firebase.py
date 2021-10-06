@@ -2,6 +2,7 @@ import json
 import logging
 import logging.config
 import os
+import time
 from datetime import datetime
 from typing import List
 
@@ -23,6 +24,8 @@ SERVICE_ACCOUNT_PATH = os.getenv("SERVICE_ACCOUNT_PATH")
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 DEFAULT_BATCH_SIZE = 100
 COLLECTIONS = ['people']
+MAX_RUN_TIME = 30
+START_TIME = time.time()
 
 # Get credentials
 cred = credentials.Certificate(POPL_SERVICE_ACCOUNT_PATH)
@@ -119,8 +122,8 @@ def _get_timestamp_string():
 def batch_upload(bucket_name: str, data: list, collection_name: str):
     filename = _generate_filename(collection_name)
     _write_file(filename, data)
-    # _upload_blob(bucket_name, filename, f"{collection_name}/{filename}")
-    # _remove_file(filename)
+    _upload_blob(bucket_name, filename, f"{collection_name}/{filename}")
+    _remove_file(filename)
 
 
 def process_subcollections(document: DocumentSnapshot) -> list:
@@ -152,40 +155,44 @@ def process_documents(bucket_name: str, documents: List[DocumentSnapshot], colle
     batch_upload(bucket_name, collection_documents, collection_name)
 
 
-def batch_process(bucket_name: str, batch_size: int, docs: list, collection_name: str):
-    batch_num = 0
-    current_size = 0
-    batch = []
+def batch_process(bucket_name: str, batch_size: int, collection_name: str):
+    offset = get_latest_offset(collection_name)
+    process = True
 
-    for doc in docs:
-        batch.append({
-            'id': doc.id,
-            'data': doc.to_dict(),
-        })
+    while process:
+        logger.info(f"Getting documents for collection {collection_name} with batch size {batch_size} and offset {offset}")
+        documents = get_collection_documents(collection_name, batch_size, offset)
+        if len(documents) == 0:
+            logger.info(f"No more documents to process for collection {collection_name}")
+            process = False
+            continue
 
-        # If batch list equals batch size, write batch to file,
-        # clear the batch list, and reset counters
-        if current_size == batch_size:
-            batch_upload(bucket_name, batch, collection_name, batch_num)
-            batch = []
-            current_size = 0
-            batch_num += 1
-            break
-            # continue
+        if (time.time() - START_TIME >= MAX_RUN_TIME):
+            logger.info(f"Job runtime {time.time() - START_TIME} approaching MAX_RUN_TIME limit")
+            process = False
+            continue
 
-        current_size += 1
+        process_documents(bucket_name, documents, collection_name)
+        offset += batch_size
 
-    # If documents remain in batch, write to file
-    if len(batch) != 0:
-        batch_upload(bucket_name, batch, collection_name, batch_num)
+    logger.info(f"Finished processing documents for collection {collection_name}")
+    logger.info(f"Saving offset {offset}...")
+    set_latest_offset(collection_name, offset)
+
+
+def get_latest_offset(collection_name: str) -> int:
+    """Fetches the last offset to sync records from that point on"""
+    return 500
+
+
+def set_latest_offset(collection_name: str, offset: int):
+    """Save the latest offset used"""
+    pass
 
 
 def load_firebase_collections():
-    for collection in COLLECTIONS:
-        logger.info(f"Getting documents for collection: {collection}...")
-        docs = get_collection_documents(collection, 3, 500)
-        # batch_process(BUCKET_NAME, DEFAULT_BATCH_SIZE, docs, collection)
-        process_documents(BUCKET_NAME, docs, collection)
+    for collection_name in COLLECTIONS:
+        batch_process(BUCKET_NAME, DEFAULT_BATCH_SIZE, collection_name)
 
 
 if __name__ == '__main__':
