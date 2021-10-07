@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 POPL_SERVICE_ACCOUNT_PATH = os.getenv("POPL_SERVICE_ACCOUNT_PATH")
 SERVICE_ACCOUNT_PATH = os.getenv("SERVICE_ACCOUNT_PATH")
 BUCKET_NAME = os.getenv("BUCKET_NAME")
-DEFAULT_BATCH_SIZE = 100
+DEFAULT_BATCH_SIZE = int(os.getenv("DEFAULT_BATCH_SIZE"))
+MAX_RUN_TIME = int(os.getenv("MAX_RUN_TIME"))
 COLLECTIONS = ['people']
 OFFSET_COLLECTION = "offset_collection"
 OFFSET_COLLECTION_KEY = 'offset'
-MAX_RUN_TIME = 30
 
 # Get credentials
 cred = credentials.Certificate(POPL_SERVICE_ACCOUNT_PATH)

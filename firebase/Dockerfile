@@ -2,7 +2,10 @@
 # https://hub.docker.com/_/python
 FROM python:3.9-slim
 
-ARG BUCKET_NAME="popl-test-bucket-123"
+# Define build args with defaults
+ARG BUCKET_NAME="popl-firebase-collections"
+ARG DEFAULT_BATCH_SIZE=1000
+ARG MAX_RUN_TIME=3300
 
 # Allow statements and log messages to immediately appear in the Knative logs
 ENV PYTHONUNBUFFERED True
@@ -16,15 +19,14 @@ COPY requirements.txt ./requirements.txt
 # Install production dependencies.
 RUN pip install --no-cache-dir -r requirements.txt
 
-ADD keys ./keys
 COPY logging.conf ./logging.conf
 COPY firebase.py ./firebase.py
 COPY main.py ./main.py
 
 # Set environment variables
 ENV BUCKET_NAME=${BUCKET_NAME}
-ENV SERVICE_ACCOUNT_PATH="${APP_HOME}/keys/keyfile.json"
-ENV POPL_SERVICE_ACCOUNT_PATH="${APP_HOME}/keys/serviceAccountKey.json"
+ENV DEFAULT_BATCH_SIZE=${DEFAULT_BATCH_SIZE}
+ENV MAX_RUN_TIME=${MAX_RUN_TIME}
 
 # Run the web service on container startup. Here we use the gunicorn
 # webserver, with one worker process and 8 threads.
