@@ -5,6 +5,8 @@ metadata:
 spec:
   template:
     spec:
+      timeoutSeconds: 3600
+      serviceAccountName: firebase-extractor@poplco.iam.gserviceaccount.com
       containers:
       - image: gcr.io/stitch-bytecode/popl-firebase-extractor:latest
         ports:
@@ -14,4 +16,3 @@ spec:
           limits:
             cpu: 1000m
             memory: 512Mi
-      timeoutSeconds: 3600
