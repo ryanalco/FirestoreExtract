@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import List
 
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import firestore
 from google.cloud import storage
 from google.cloud.firestore_v1.base_document import DocumentSnapshot
 from google.cloud.firestore_v1.collection import CollectionReference
@@ -19,22 +19,19 @@ logging.config.fileConfig(fname=log_file_path, disable_existing_loggers=False)
 # Get the logger specified in the file
 logger = logging.getLogger(__name__)
 
-POPL_SERVICE_ACCOUNT_PATH = os.getenv("POPL_SERVICE_ACCOUNT_PATH")
-SERVICE_ACCOUNT_PATH = os.getenv("SERVICE_ACCOUNT_PATH")
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 DEFAULT_BATCH_SIZE = int(os.getenv("DEFAULT_BATCH_SIZE"))
 MAX_RUN_TIME = int(os.getenv("MAX_RUN_TIME"))
-COLLECTIONS = ['people']
+COLLECTIONS = ['people', 'purchases', 'activationLocation']
 OFFSET_COLLECTION = "offset_collection"
 OFFSET_COLLECTION_KEY = 'offset'
 
-# Get credentials
-cred = credentials.Certificate(POPL_SERVICE_ACCOUNT_PATH)
-firebase_admin.initialize_app(cred)
+# Initialize firebase app
+firebase_admin.initialize_app()
 
 # Instantiate clients
 db = firestore.client()
-storage_client = storage.Client.from_service_account_json(json_credentials_path=SERVICE_ACCOUNT_PATH)
+storage_client = storage.Client()
 
 
 def get_collection_documents(collection_name: str, batch_size: int, offset: int) -> list:
@@ -156,6 +153,8 @@ def process_documents(bucket_name: str, documents: List[DocumentSnapshot], colle
     subcollection_set = {col.get('name') for col in subcollection_documents}
     for subcollection_name in subcollection_set:
         data = [col for col in subcollection_documents if col.get('name') == subcollection_name]
+        if len(data) == 0:
+            continue
         batch_upload(bucket_name, data, subcollection_name)
 
     batch_upload(bucket_name, collection_documents, collection_name)
