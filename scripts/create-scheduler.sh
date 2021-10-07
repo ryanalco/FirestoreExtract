@@ -1,8 +1,11 @@
 #!/bin/bash
 
+SERVICE_URL=$1
+SERVICE_ACCOUNT_EMAIL=$2
+
 # usage: bash create-scheduler.sh SERVICE_URL SERVICE_ACCOUNT_EMAIL
-gcloud scheduler jobs create http invoke-firebase-extractor --schedule "0 1 * * *" \
+gcloud scheduler jobs create http invoke-firebase-extractor --schedule "0 * * * *" \
    --http-method=GET \
-   --uri=$1 \
-   --oidc-service-account-email=$2\
-   --oidc-token-audience=$1
+   --uri=${SERVICE_URL} \
+   --oidc-service-account-email=${SERVICE_ACCOUNT_EMAIL} \
+   --oidc-token-audience=${SERVICE_URL}

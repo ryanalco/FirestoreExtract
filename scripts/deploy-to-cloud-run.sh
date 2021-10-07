@@ -1,3 +1,6 @@
 #!/bin/bash
 
-gcloud run services replace service.yml --region=us-west1
+REGION=$1
+
+# usage: bash scripts/deploy_to_cloud_run.sh REGION
+gcloud run services replace service.yml --region=${REGION}
