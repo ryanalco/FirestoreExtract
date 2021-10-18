@@ -4,7 +4,7 @@ import logging.config
 import os
 import time
 from datetime import datetime
-from typing import List
+from typing import Any, List
 
 import firebase_admin
 from firebase_admin import firestore
@@ -34,9 +34,9 @@ db = firestore.client()
 storage_client = storage.Client()
 
 
-def get_collection_documents(collection_name: str, batch_size: int, offset: int) -> list:
+def get_collection_documents(collection_name: str, query_field: str, query_value: Any, query_sign=">=") -> list:
     """Gets documents from a firebase collection"""
-    return db.collection(collection_name).offset(offset).limit(batch_size).get()
+    return db.collection(collection_name).where(query_field, query_sign, query_value).get()
 
 
 def get_subcollection_references(document: DocumentSnapshot) -> CollectionReference:
@@ -160,55 +160,54 @@ def process_documents(bucket_name: str, documents: List[DocumentSnapshot], colle
     batch_upload(bucket_name, collection_documents, collection_name)
 
 
-def batch_process(bucket_name: str, batch_size: int, collection_name: str, start_time: float):
-    offset = get_latest_offset(collection_name)
-    process = True
+def batch_process(bucket_name: str, collection_name: str, start_time: float):
+    offset_dict = get_latest_offset(collection_name)
+    if offset_dict:
+        offset_key = list(offset_dict.keys())[0]
+        offset = offset_dict[offset_key]
+    else:
+        raise Exception(f'No offset found for collection {collection_name}')
 
-    while process:
-        logger.info(f"Getting documents for collection {collection_name} with batch size {batch_size} and offset {offset}")
-        documents = get_collection_documents(collection_name, batch_size, offset)
-        if len(documents) == 0:
-            logger.info(f"No more documents to process for collection {collection_name}")
-            process = False
-            continue
+    logger.info(f"Getting documents for collection {collection_name}")
+    documents = get_collection_documents(collection_name, offset_key, offset)
+    if len(documents) == 0:
+        logger.info(f"No more documents to process for collection {collection_name}")
+        return
 
-        if (time.time() - start_time >= MAX_RUN_TIME):
-            logger.info(f"Job runtime {time.time() - start_time} approaching MAX_RUN_TIME limit")
-            process = False
-            continue
+    if (time.time() - start_time >= MAX_RUN_TIME):
+        logger.info(f"Job runtime {time.time() - start_time} approaching MAX_RUN_TIME limit")
+        return
 
-        process_documents(bucket_name, documents, collection_name)
-        offset += batch_size
+    process_documents(bucket_name, documents, collection_name)
 
     logger.info(f"Finished processing documents for collection {collection_name}")
-    logger.info(f"Saving offset {offset}...")
-    set_latest_offset(collection_name, offset)
+    logger.info(f"Saving offset {offset_key} with offset {offset}...")
+    set_latest_offset(collection_name, offset_key, offset)
 
 
-def get_latest_offset(collection_name: str) -> int:
+def get_latest_offset(collection_name: str) -> dict:
     """Fetches the last offset to sync records from that point on"""
     offset_id = _format_offset_id(collection_name)
     doc = db.collection(OFFSET_COLLECTION).document(offset_id).get()
     if doc.exists:
-        offset = doc.to_dict().get(OFFSET_COLLECTION_KEY)
-        logger.info(f"Found offset {offset} for collection {collection_name}")
-        return offset
+        logger.info(f"Found offset for collection {collection_name}")
+        return doc.to_dict()
     else:
         logger.warning(f"No offset found for collection {collection_name} in the {OFFSET_COLLECTION} collection. Using 0 as default offset")
-        return 0
+        return None
 
 
-def set_latest_offset(collection_name: str, offset: int):
+def set_latest_offset(collection_name: str, offset_key:str, offset: Any):
     """Save the latest offset used"""
     offset_id = _format_offset_id(collection_name)
-    data = {OFFSET_COLLECTION_KEY: offset}
+    data = {offset_key: offset}
     db.collection(OFFSET_COLLECTION).document(offset_id).set(data)
 
 
 def load_firebase_collections():
     start_time = time.time()
     for collection_name in COLLECTIONS:
-        batch_process(BUCKET_NAME, DEFAULT_BATCH_SIZE, collection_name, start_time)
+        batch_process(BUCKET_NAME, collection_name, start_time)
 
 
 if __name__ == '__main__':
