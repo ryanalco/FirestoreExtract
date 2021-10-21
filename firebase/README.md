@@ -77,6 +77,8 @@ Google Cloud Run runs a containerized service. This container is triggered by HT
 
 Once the Dockerfile is created, you will need to build the image and push it to a container registry so that Google Cloud Run can retrieve it and run the service.
 
+> **Note**: These commands should be run from the root of the repo
+
 1. Build the image:
 
     ```bash
@@ -143,3 +145,49 @@ Once the Dockerfile is created, you will need to build the image and push it to 
 
     > **Hint**: you can run the following command to get the service account email address:
     > `gcloud iam service-accounts list`
+
+## Firebase
+
+### Code
+
+The `get_collection_documents` function in the [firebase.py](firebase/firebase.py) is the function that creates a firebase query. This is where you can update the query as needed.
+
+### Environment Variables
+
+The firebase service is built using a [Dockerfile](firebase/Dockerfile). The Dockerfile has `ARG`s defined near the top of the file which populate environment variables in the container which the `firebase.py` code uses. These need to be updated with the approriate env vars. Alternatively, using `ARG`s also allows these values to be overwritten when building the container. Example:
+
+```bash
+docker buildx build --platform linux/amd64 -t \
+    --build-arg BUCKET_NAME=<MY_BUCKET_NAME> \
+    --build-arg MAX_RUN_TIME=3600 \
+    gcr.io/<PROJECT_ID>/<IMAGE_NAME>:latest ./firebase
+```
+
+## Using Scripts
+
+I have provided some simple bash scripts to help with the different steps needed to build, tag, and push a docker image to gcr as well as scripts for deploying the service to Cloud Run and creating the schedule. These scripts have variables at the top of the file that can be passed to the script when running. Example, take a look at the [build.sh](scripts/build.sh) script:
+
+```bash
+#!/bin/bash
+
+PROJECT_ID=$1
+BASE_IMAGE_NAME=$2
+BUCKET=$3
+DEFAULT_BATCH_SIZE=$4
+MAX_RUN_TIME=$5
+
+# usage: ./build.sh PROJECT_ID BASE_IMAGE_NAME BUCKET DEFAULT_BATCH_SIZE MAX_RUN_TIME
+docker buildx build --platform linux/amd64 \
+    --build-arg BUCKET=${BUCKET} \
+    --build-arg DEFAULT_BATCH_SIZE=${DEFAULT_BATCH_SIZE} \
+    --build-arg MAX_RUN_TIME=${MAX_RUN_TIME} \
+    -t gcr.io/${PROJECT_ID}/${BASE_IMAGE_NAME}:latest ./firebase
+```
+
+This could be run like so (from the root of the repo):
+
+```bash
+bash scripts/build.sh poplco firebase-extractor popl-firebase-collections 1000 600
+```
+
+Where each argument after `scripts/build.sh` is an argument that is mapped in order to each variable defined at the top of the script. "poplco" would equate to `$1`, "firebase-extractor" would be `$2`, etc...
