@@ -36,7 +36,7 @@ storage_client = storage.Client()
 
 def get_collection_documents(collection_name: str, query_field: str, query_value: Any, query_sign=">=") -> list:
     """Gets documents from a firebase collection"""
-    return db.collection(collection_name).where(query_field, query_sign, query_value).get()
+    return db.collection(collection_name).where(query_field, query_sign, query_value).order_by(query_field).get()
 
 
 def get_subcollection_references(document: DocumentSnapshot) -> CollectionReference:
@@ -134,16 +134,22 @@ def process_subcollections(document: DocumentSnapshot) -> list:
     return process_subcollection_documents(subcollection_references, document.id)
 
 
-def process_documents(bucket_name: str, documents: List[DocumentSnapshot], collection_name: str):
+def process_documents(bucket_name: str, documents: List[DocumentSnapshot], collection_name: str, offset_key: str, offset: Any) -> Any:
     """Prepare and process documents form a collection"""
 
     collection_documents = []
     subcollection_documents = []
     for document in documents:
+        data = document.to_dict()
+        # Get offset from document, default to current offset if no offset
+        doc_offset = data.get(offset_key, offset)
         collection_documents.append({
             'id': document.id,
-            'data': document.to_dict(),
+            'data': data,
         })
+
+        # Update the latest offset
+        offset = max(offset, doc_offset)
 
         subcollections = process_subcollections(document)
         subcollection_documents.extend(subcollections)
@@ -158,6 +164,8 @@ def process_documents(bucket_name: str, documents: List[DocumentSnapshot], colle
         batch_upload(bucket_name, data, subcollection_name)
 
     batch_upload(bucket_name, collection_documents, collection_name)
+
+    return offset
 
 
 def batch_process(bucket_name: str, collection_name: str, start_time: float):
@@ -174,11 +182,12 @@ def batch_process(bucket_name: str, collection_name: str, start_time: float):
         logger.info(f"No more documents to process for collection {collection_name}")
         return
 
+    offset = process_documents(bucket_name, documents, collection_name, offset_key, offset)
+
     if (time.time() - start_time >= MAX_RUN_TIME):
         logger.info(f"Job runtime {time.time() - start_time} approaching MAX_RUN_TIME limit")
+        set_latest_offset(collection_name, offset_key, offset)
         return
-
-    process_documents(bucket_name, documents, collection_name)
 
     logger.info(f"Finished processing documents for collection {collection_name}")
     logger.info(f"Saving offset {offset_key} with offset {offset}...")
